@@ -1,0 +1,39 @@
+# pasa-rpa-digitacao-peg configuration file
+
+smtp:
+    host: smtp.postmarkapp.com
+    port: 587
+    from: rpa@sistemaspasa.com.br
+    headers: ["X-PM-Message-Stream: rpa"]
+    subject: PASA - DIGITAÇÃO PEG
+    username: 18ce15fc-4485-4eae-a119-3089edf0d1e1
+    password: 18ce15fc-4485-4eae-a119-3089edf0d1e1
+    conn_timeout: 60
+    SSL: true
+    auth: 1
+    enabled: true
+    TLS: true
+    template: email.html
+    logo: logo.png    
+
+mobilesaude:
+    username: 90J00652@planopasa.com.br
+    password: 90J00652@pasa2024
+    
+benner:
+    username: 90J00652
+    password: Pasa@@robo0652  
+
+emails:
+    success: rpa@mitrius.com
+    error: rpa@mitrius.com
+        
+commons:
+    log_level: 10 # CRITICAL=50, ERROR=40, WARNING=30, INFO=20, DEBUG=10
+    encoding: utf-8
+    retention: 30 # days
+    
+restart:
+    max_execution_time: 10800 # sec
+    wait_fixed: 60000 # milsec
+    stop_max_attempt_number: 10
