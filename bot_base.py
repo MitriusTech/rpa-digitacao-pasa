@@ -2,36 +2,23 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import logging
 import sys
-from commons import *
+from utils.config import config
+from utils.global_parameters import global_parameters
+from utils.globals import *
+import commons
 import urllib3
-from timeit import default_timer as timer
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from mss import mss
 import shutil
 from wrapt_timeout_decorator import *
 
-# Globals
-today_ = datetime.today()
-tomorow = (today_ + timedelta(days=1)).strftime('%d/%m/%Y')
-today = today_.strftime('%Y%m%d')
-todayFormatted = today_.strftime('%d/%m/%Y')
-path = os.getcwd()
-temp = f'{path}\\temp'
-log = f'{path}\\log\\{today}-{today_.strftime("%H%M")}' 
-logFile = f'log{today}{today_.strftime("%H%M%S")}.log'
-logFileFullPath = f'{log}\\{logFile}'
-configFile = './/config.yml' 
-config = vault(configFile)
-SAPSession = None
-Wnd0 = None
-Menubar = None
-UserArea = None
-Statusbar = None
-UserName = None
-startTime = timer()  
-global_parameters = get_parameters()
+commons.pd
+
+colunas = {valor: indice for indice, valor in enumerate(commons.pd.read_excel(
+    "./data/parameters.xlsx", engine='openpyxl', sheet_name="ids", header=None).iloc[:, 0].tolist())}
+
 
 def screenShot() -> str:
     screenshot = f'{log}\\{datetime.today().strftime("%H%M%S")}.png'
@@ -82,7 +69,7 @@ def show_exception_and_exit(exc_type, exc_value, tb):
     logging.info("#### Finalizado ####")   
     logging.shutdown()
 
-    sendemail_postmarkapp(config["smtp"]["host"], 
+    commons.sendemail_postmarkapp(config["smtp"]["host"], 
               config["smtp"]["port"], 
               config["smtp"]["username"], 
               config["smtp"]["password"], 
@@ -118,11 +105,11 @@ def bot_base():
         ])
     logging.getLogger().setLevel(int(config['commons']['log_level']))
 
-    close_excel() 
+    commons.close_excel() 
 
     remove_process_folder()
 
-    delete_temp_files()
+    commons.delete_temp_files()
 
 def getConfig():
     return config
@@ -187,3 +174,36 @@ def is_element_ready(page, selector, check="visible", timeout=6000, printscreen=
         page.screenshot(path=f'{log}\\screenshot_{today}_{today_.strftime("%H%M%S")}.png', full_page=True)                
 
     return False      
+
+
+def send_emails(sumary):
+        
+        if not bool(config["smtp"]["enabled"]):
+            return
+
+        with open(config["smtp"]["template"], 'r', encoding=config["commons"]["encoding"]) as template:
+            
+            html = template.read().format(
+                "A tarefa de lançamento de PEG foi realizada com sucesso",
+                "A tarefa de lançamento de PEG foi realizada com sucesso. Todos os detalhes do processamento estão no log em anexo.",
+                "<p style=\"font-family:'Courier New'\">" + "<br/>".join(sumary) + "</p>",
+                "",
+                "lançamento PEG"
+                )
+        
+        logging.info("Enviando e-mail...")
+        logging.info(config["emails"]["success"] + "," + str(global_parameters["emails_success"]))
+        logging.shutdown()
+
+        commons.sendemail_postmarkapp(config["smtp"]["host"], 
+                config["smtp"]["port"], 
+                config["smtp"]["username"], 
+                config["smtp"]["password"], 
+                config["smtp"]["headers"], 
+                f'{config["smtp"]["subject"]} - AGENDA {todayFormatted} {today_.strftime("%H:%M")}', 
+                config["smtp"]["from"], 
+                config["emails"]["success"] + "," + str(global_parameters["emails_success"]), 
+                html,
+                [config["smtp"]["logo"]],
+                [f"{log}/{arquivo}" for arquivo in os.listdir(log)]) 
+        

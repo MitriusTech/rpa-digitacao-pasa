@@ -26,7 +26,6 @@ import win32ui
 from subprocess import check_output
 from xml.dom.minidom import *
 from datetime import datetime, timedelta
-import easy_vault
 import paramiko
 from functools import wraps, reduce
 import time
@@ -41,6 +40,18 @@ from playwright.sync_api import Locator
 from typing import List, Callable
 import lmdb
 import uuid
+from utils.config import config
+from utils.global_parameters import global_parameters
+from pathlib import Path
+from datetime import datetime
+from requests import Session, session
+from bot_base import log
+from bot_base import today_
+from bot_base import today
+from bot_base import path
+from http import HTTPStatus
+from collections import Counter
+from requests import Session
 
 xmlParser = Document()
 
@@ -101,13 +112,6 @@ def timeit(func):
         logging.info(f'Function {func.__name__} Took {total_time:.4f} seconds')
         return result
     return timeit_wrapper
-
-def vault(configFile):
-    vault_file = configFile
-    password = easy_vault.get_password(vault_file)
-    vault = easy_vault.EasyVault(vault_file, password)
-    easy_vault.set_password(vault_file, password)
-    return vault.get_yaml()
 
 def sftpOpen(host, port = 22, username = None, password = None):
     # create ssh client 
@@ -522,18 +526,22 @@ def try_again_on_any_exception(exception) -> bool:
 
 
 @retry(retry_on_exception=retry_if_connection_error, wait_fixed=5000, stop_max_attempt_number=30)
-def safe_get(url, **kwargs):
-    return requests.get(url, **kwargs)
+def safe_get(session, url, **kwargs):
+    return session.get(url, **kwargs)
 
 
 @retry(retry_on_exception=retry_if_connection_error, wait_fixed=5000, stop_max_attempt_number=30)
-def safe_post(url, **kwargs):
-    return requests.post(url, **kwargs)
+def safe_post(session: Session, url: str, **kwargs):
+    return session.post(url, **kwargs)
 
 
 @retry(retry_on_exception=retry_if_connection_error, wait_fixed=5000, stop_max_attempt_number=30)
 def safe_patch(url, **kwargs):
     return requests.patch(url, **kwargs)
+
+@retry(retry_on_exception=retry_if_connection_error, wait_fixed=5000, stop_max_attempt_number=30)
+def safe_put(session:Session, url:str, **kwargs):
+    return session.put(url, **kwargs)
 
 
 class LazyDecoder(json.JSONDecoder):
@@ -1425,3 +1433,311 @@ class LMDBWrapper:
                     deleted += 1
 
         return deleted
+
+
+def transform_timestamp_to_datetime(timestamp: int) -> datetime:
+    """
+    Converte um timestamp Unix (segundos desde 1970-01-01) para um objeto datetime.
+
+    Args:
+        timestamp (int): Timestamp Unix.
+
+    Returns:
+        datetime: Objeto datetime correspondente ao timestamp.
+    """
+    format_timestamp = int(timestamp)
+    date = datetime.fromtimestamp(format_timestamp / 1000)
+    return date.strftime("%d/%m/%Y")
+
+def safe_get_phone_number(ocurrence_data: dict, form_data: dict) -> str:
+    beneficiario = ocurrence_data.get("beneficiario")
+    telefone_contato = form_data.get("telefone-contato")
+
+    if isinstance(beneficiario, dict) and "telefone" in beneficiario:
+        return beneficiario["telefone"]
+    elif isinstance(telefone_contato, str) and telefone_contato.strip():
+        return telefone_contato
+    else:
+        return ""
+
+
+def safe_get_label_in_array(data: dict, key: str) -> str:
+    """
+    Pega o primeiro label da lista dentro da chave `key` no dicionário `data`.
+    Se não existir ou estiver vazio, retorna uma mensagem padrão.
+    """
+
+    items = data.get(key) or [{}]
+    if isinstance(items, list) and len(items) > 0:
+        label = items[0].get("label")
+        if isinstance(label, list) and len(label) > 0:
+            return label[0]
+    return ""
+
+
+def safe_get_text(data: dict, key: str) -> str:
+    if not isinstance(data, dict):
+        return ""
+    value = data.get(key)
+    return value if value else ""
+
+
+def safe_supplier_document(data: dict) -> str:
+    """
+    Obtém o documento do fornecedor de forma segura.
+    """
+    document_type = safe_get_label_in_array(data, "tipo-prestador")
+
+    if document_type == "Jurídica":
+        return safe_get_text(data, "cpf-cnpj-do-prestador")
+
+    return safe_get_text(data, "cpf")
+
+
+def get_url_payment_data(service_tab: list):
+    id_form = ""
+    id_form_data = ""
+    url = ""
+
+    for service in service_tab:
+        if service.get("nome").lower() == "pagamento":
+            form_data = service.get("formDatas", {})
+
+            if not form_data:
+                return None
+
+            id_form_data = form_data[0]
+            id_form = service.get("id_form")
+            url = f"https://api.mosiaomnichannel.com.br/privado/omni/form_builder/v1/gan/saudeams/form/{id_form}/data/{id_form_data}"
+
+            return url
+
+
+def get_payment_data(url: str, session: Session):
+    response = session.get(url)
+
+    if not response.ok:
+        logging.error(
+            f"Erro ao obter dados de pagamento: {response.status_code} - {response.text}")
+        return None
+
+    payment_info = response.json()
+    return payment_info.get("data")
+
+
+def get_situation_options(url, session:Session):
+    status_list = []
+
+    response = session.get(url)
+
+    if not response.ok:
+        logging.error(
+            f"Erro ao obter opções de situação: {response.status_code} - {response.text}")
+        return None
+
+    situation_info = response.json()
+    for item in situation_info.get("data", []):
+        status_list.append(item.get("id_status"))
+        status_list.append(item.get("descricao_interna"))
+
+    return status_list
+
+@timeit
+@handle_exceptions(default_return=False)
+@retry(retry_on_exception=try_again_on_any_exception, wait_fixed=10000, stop_max_attempt_number=5)
+def login_mobile_saude(session:Session) -> bool:
+
+    payload = {
+        "domain": config["mobilesaude"]["domain"],
+        "password": config["mobilesaude"]["password"],
+        "user": config["mobilesaude"]["username"]
+    }
+
+    response = safe_post(
+        session,
+        global_parameters["mobilesaude.submit_login"], data=payload, verify=False)
+
+    if not response.ok:
+        logging.error(f"Erro no login: {response.status_code}")
+        return False
+
+    token = safe_get_text(response.json(), "token")
+
+    if not token:
+        logging.error(f"Token não encontrado na resposta do login")
+        return False
+    
+    env = global_parameters["env"]
+    env_filter = global_parameters[f"mobilesaude.env_filter_{env}"]
+    
+    session.headers.update({
+        "instancia_aplicacao": str(env_filter),
+        "Authorization": f"{token}",
+    })
+
+    post_status = safe_post(
+        session,
+        global_parameters["mobilesaude.change_attendant_status"], 
+        data={"status": global_parameters["mobilesaude.attendant_status"]}, 
+        verify=False
+    )
+
+    if not post_status.ok:
+        logging.error(f"Erro ao atualizar status: {post_status.status_code}")
+        return False
+
+    logging.info(f'Login com sucesso {config["mobilesaude"]["username"]}...')
+    logging.info(f'Navegando para SAUDE AMS...')
+
+    return True
+
+
+def convert_date(date: str) -> str:
+    try:
+        date_obj = datetime.strptime(date, "%Y-%m-%d")
+        return date_obj.strftime("%d/%m/%Y")
+    except ValueError:
+        return date
+    
+@timeit
+def reload_old_files():
+
+    def find_xlsx_files(base_directory):
+        xlsx_files = []
+
+        for root, dirs, files in os.walk(base_directory):
+            for file in files:
+                if file.lower().startswith('protocolos') and file.lower().endswith('.xlsx'):
+                    full_path = os.path.join(root, file)
+                    xlsx_files.append(full_path)
+
+        return xlsx_files
+
+    logging.info(f'Recarregando arquivos de processamentos anteriores...')
+
+    worksheets = find_xlsx_files(f'{path}\\log')
+    worksheets_count = 0
+    worksheets_total = len(worksheets)
+
+    column_names = pd.read_excel("./data/parameters.xlsx", engine='openpyxl', sheet_name="labels", header=None).iloc[:, 0].tolist()
+    column_ids = pd.read_excel("./data/parameters.xlsx", engine='openpyxl', sheet_name="ids", header=None).iloc[:, 0].tolist()
+
+    db = LMDBWrapper()
+
+    logging.info(db.usage_stats())
+
+    for worksheet in worksheets:
+
+        worksheets_count += 1         
+
+        logging.info(f'Reprocessando planilha {os.path.basename(worksheet)} {worksheets_count}/{worksheets_total}...')
+
+        result = db.count_where(lambda d: d["file_id"] == os.path.basename(worksheet))     
+        
+        #
+        wb = safely_load_workbook(worksheet, read_only=True)
+        if not wb:
+            continue
+        
+        ws = wb.active
+        protocols_total = ws.max_row -1
+
+        if result == protocols_total:
+            continue
+
+        colunas = {cell.value: cell.column for cell in ws[1]}
+        new_colunas = {}
+
+        for chave, valor in colunas.items():
+            if chave in column_names:
+                index = column_names.index(chave)
+                nova_chave = column_ids[index]
+            else:
+                nova_chave = chave  # mantém original se não encontrar
+            new_colunas[nova_chave] = valor - 1 
+
+        colunas = new_colunas
+        protocols_count = 0
+
+        db.delete_where(lambda doc: doc["file_id"] == os.path.basename(worksheet))
+
+        for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+
+            protocols_count += 1         
+
+            logging.info(f'Incluindo protocolo {row[colunas.get("protocol_id")].value} no BD {protocols_count}/{protocols_total}...')
+
+            record = {
+                'file_id': os.path.basename(worksheet),
+                'env': row[colunas.get("env")].value if colunas.get("env") else ("prd" if int(row[colunas.get("refund_id")].value) > 999999 else "hml"),
+                'refund_id': row[colunas.get("refund_id")].value,
+                'protocol_id': row[colunas.get("protocol_id")].value,
+                'protocol_date': row[colunas.get("protocol_date")].value,
+                'status_id': row[colunas.get("status_id")].value,
+                'status_desc': row[colunas.get("status_desc")].value,
+                'refund_type': row[colunas.get("refund_type")].value,
+                'refund_qty': row[colunas.get("refund_qty")].value,
+                'refund_value': row[colunas.get("refund_value")].value,
+                'card': row[colunas.get("card")].value,
+                'user': row[colunas.get("user")].value if colunas.get("user") else None,
+                'holder_name': row[colunas.get("holder_name")].value,
+                'holder_cpf': row[colunas.get("holder_cpf")].value,
+                'phone_number': row[colunas.get("phone_number")].value,
+                'plan': row[colunas.get("plan")].value,
+                'payment_day': row[colunas.get("payment_day")].value,
+                'payment_type': row[colunas.get("payment_type")].value,
+                'lot': row[colunas.get("lot")].value,
+                'expense_id': row[colunas.get("expense_id")].value,
+                'expense_status': row[colunas.get("expense_status")].value,
+                'supplier_id': row[colunas.get("supplier_id")].value,
+                'supplier_name': row[colunas.get("supplier_name")].value,
+                'supplier_state': row[colunas.get("supplier_state")].value,
+                'supplier_city': row[colunas.get("supplier_city")].value,
+                'expense_date': row[colunas.get("expense_date")].value,
+                'expense_nf': row[colunas.get("expense_nf")].value,
+                'guide_number': row[colunas.get("guide_number")].value if colunas.get("guide_number") else None,
+                'PEG': row[colunas.get("PEG")].value,
+                'notes': row[colunas.get("notes")].value,
+                'assigned': row[colunas.get("assigned")].value,
+                'comment': row[colunas.get("comment")].value,
+                'complement': row[colunas.get("complement")].value if colunas.get("complement") else None,
+            }
+
+            db.insert(record)
+
+    logging.info(f'Recarregando arquivos de processamentos anteriores... OK')
+
+    return None
+
+
+def get_occurrence_data(session: Session, occurrence: str) -> dict:
+    url = global_parameters["mobilesaude.occurrence_details"] % occurrence
+    response = session.get(url)
+
+    if not response.ok:
+        return None
+
+    return response.json().get("data")
+
+
+def get_occurrence_by_protocol(session: Session, protocol_id: str) -> dict:
+    response = session.get(global_parameters["mobilesaude.query_protocolos"], headers={
+        "search": protocol_id
+    })
+
+    if not response.ok or not response.json().get("status"):
+        return None
+
+    return response.json().get("data")[0]
+
+
+def get_attendance_data(session: Session) -> dict :
+    url = global_parameters["mobilesaude.get_attendants"]
+    occurrence_type = global_parameters["mobilesaude_occurrence_type_filter"]
+    headers = {"idtipoocorrencia": str(occurrence_type)}
+    response = session.get(url, headers=headers)
+
+    if not response.ok or not response.json().get("status"):
+        return None
+
+    return response.json().get("data")

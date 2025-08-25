@@ -17,8 +17,9 @@ smtp:
     logo: logo.png    
 
 mobilesaude:
-    username: 90J00652@planopasa.com.br
-    password: 90J00652@pasa2024
+    domain: "saudeams"
+    password: "sNdg5FkGG789d5jfmmc9yPRR"
+    username: "90J00652@planopasa.com.br"
     
 benner:
     username: 90J00652
