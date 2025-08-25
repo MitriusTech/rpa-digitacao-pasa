@@ -1,9 +1,8 @@
 import logging
-from utils.global_parameters import global_parameters
-from utils.config import config
-from commons import *
+from packages.global_parameters import *
+from packages.config import *
+from packages.commons import *
 import ast
-from requests import Session
 
 
 @timeit
@@ -33,7 +32,7 @@ def get_protocols(session) -> list:
     filter_value = json.dumps({
         "dataRegistro": ["", ""],
         "mostrar_encerrados": False,
-        "id_status": [global_parameters["mobilesaude.requested_statuses"]],  
+        "id_status": [global_parameters["mobilesaude.requested_status"]],  
         "atendimento":1,
         "id_tipo_ocorrencia": global_parameters["mobilesaude_occurrence_type_filter"]
     })
@@ -41,7 +40,7 @@ def get_protocols(session) -> list:
     payload = {
         "limit": 9999,
         "order": "DESC",
-        "Order_field": "dataRegistro",
+        "Order_field": "data_registro",
         "Filter": filter_value
     }
 
@@ -53,7 +52,7 @@ def get_protocols(session) -> list:
         global_parameters["mobilesaude.query_protocolos"], headers=custom_headers, verify=False
     )
 
-    if not response_occurrences.status_code == HTTPStatus.OK:
+    if not response_occurrences.status_code == HTTPStatus.OK or not response_occurrences.json().get("status"):
         logging.error(f"Erro ao obter protocolos")
         return None
 

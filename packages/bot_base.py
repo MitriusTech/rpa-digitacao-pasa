@@ -2,10 +2,10 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import logging
 import sys
-from utils.config import config
-from utils.global_parameters import global_parameters
-from utils.globals import *
-import commons
+from packages.config import config
+from packages.global_parameters import global_parameters
+from packages.globals import *
+import packages.commons as commons
 import urllib3
 import os
 from datetime import datetime

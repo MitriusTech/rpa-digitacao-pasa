@@ -1,11 +1,11 @@
 import warnings
 from cryptography.utils import CryptographyDeprecationWarning
-from commons import __get_parameters
+from packages.commons import __get_parameters
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
 import logging
-from commons import *
-from bot_base import *
+from packages.commons import *
+from packages.bot_base import *
 import pandas as pd
 from retrying import retry
 from wrapt_timeout_decorator import *
@@ -39,8 +39,6 @@ def run() -> int:
 
   
     try:
-
-        # Criar um contexto SSL que ignora a verificação de certificado
         ssl_context = ssl.create_default_context()
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
@@ -96,7 +94,8 @@ def run() -> int:
 
         logging.info("#### Finalizado ####")     
 
-        send_emails(sumary)
+        # Descomentar
+        # send_emails(sumary)
 
         return 0
 

@@ -1,10 +1,10 @@
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import sys
-from commons import *
-from bot_base import *
+from packages.commons import *
+from packages.bot_base import *
 from wrapt_timeout_decorator import *
-import core
+import features.core as core
 from multiprocessing import Process, freeze_support
 
 def handle_exceptions_with(excepthook, target, /, *args, **kwargs):

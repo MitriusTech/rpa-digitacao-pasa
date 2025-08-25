@@ -40,15 +40,15 @@ from playwright.sync_api import Locator
 from typing import List, Callable
 import lmdb
 import uuid
-from utils.config import config
-from utils.global_parameters import global_parameters
+from packages.config import config
+from packages.global_parameters import global_parameters
 from pathlib import Path
 from datetime import datetime
 from requests import Session, session
-from bot_base import log
-from bot_base import today_
-from bot_base import today
-from bot_base import path
+from packages.bot_base import log
+from packages.bot_base import today_
+from packages.bot_base import today
+from packages.bot_base import path
 from http import HTTPStatus
 from collections import Counter
 from requests import Session

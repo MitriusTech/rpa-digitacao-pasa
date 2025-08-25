@@ -1,8 +1,8 @@
 import logging
-from utils.global_parameters import *
-from utils.config import *
-from commons import *
-from bot_base import *
+from packages.global_parameters import global_parameters
+from packages.config import config
+from packages.commons import *
+from packages.bot_base import *
 import ast
 
 

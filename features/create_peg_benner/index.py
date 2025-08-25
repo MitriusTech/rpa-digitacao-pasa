@@ -1,8 +1,7 @@
 import logging
-from utils.global_parameters import  global_parameters, __get_parameters
-from utils.config import config
-from bot_base import *
-from commons import *
+from packages.global_parameters import global_parameters, __get_parameters
+from packages.commons import *
+from packages.bot_base import *
 from playwright.sync_api import sync_playwright
 import traceback
 
