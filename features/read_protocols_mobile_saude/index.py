@@ -34,7 +34,7 @@ def get_protocols(session) -> list:
         "mostrar_encerrados": False,
         "id_status": [global_parameters["mobilesaude.requested_status"]],  
         "atendimento":1,
-        "id_tipo_ocorrencia": global_parameters["mobilesaude_occurrence_type_filter"]
+        "id_tipo_ocorrencia": global_parameters["mobilesaude.occurrence_type_filter"]
     })
 
     payload = {
@@ -177,7 +177,7 @@ def read_protocols_mobile_saude() -> str:
             assigned = safe_get_text(data, "atendente")
             plan = safe_get_text(request_form_data_json, "plano")
             holder_name = safe_get_text(data["solicitante"], "nome")
-            holder_cpf = safe_get_text(request_form_data_json, "cpf")
+            holder_cpf = safe_get_text(request_form_data_json, "beneficiario_cpf")
             phone_number = safe_get_phone_number(data, request_form_data_json)
             refund_value = safe_get_text(request_form_data_json, "valor-da-despesa")
             user = safe_get_text(request_form_data_json, "beneficiario") or safe_get_text(data["beneficiario"], "nome")

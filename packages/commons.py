@@ -1488,7 +1488,7 @@ def safe_supplier_document(data: dict) -> str:
     """
     document_type = safe_get_label_in_array(data, "tipo-prestador")
 
-    if document_type == "Jurídica":
+    if document_type == "Juridica":
         return safe_get_text(data, "cpf-cnpj-do-prestador")
 
     return safe_get_text(data, "cpf")
@@ -1733,7 +1733,7 @@ def get_occurrence_by_protocol(session: Session, protocol_id: str) -> dict:
 
 def get_attendance_data(session: Session) -> dict :
     url = global_parameters["mobilesaude.get_attendants"]
-    occurrence_type = global_parameters["mobilesaude_occurrence_type_filter"]
+    occurrence_type = global_parameters["mobilesaude.occurrence_type_filter"]
     headers = {"idtipoocorrencia": str(occurrence_type)}
     response = session.get(url, headers=headers)
 

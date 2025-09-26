@@ -68,13 +68,13 @@ def update_protocols_mobile_saude(worksheet) -> list:
         if not found_user:
             logging.error(f"Usuário {new_attendant} não encontrado.")
             return None
-        
+
         return True
 
     @timeit
     @handle_exceptions(default_return=None)
     @retry(retry_on_exception=try_again_on_any_exception, wait_fixed=10000, stop_max_attempt_number=5)
-    def assign_to_bot(idStatus:int) -> bool:
+    def assign_to_bot(idStatus: int) -> bool:
         url = global_parameters["mobilesaude.assigned_to_user"] % refund_id
         payload = {
             "idStatus": idStatus
@@ -140,6 +140,8 @@ def update_protocols_mobile_saude(worksheet) -> list:
                 PEG = response_json.get("numeroLote")
                 row[colunas.get("PEG")].value = PEG
 
+        for tab in service_tabs:
+            tab_name = tab.get("nome", "").lower()
             if tab_name == "observações internas":
                 id_form = tab.get("id_form")
                 id_form_data = tab.get("formDatas")
@@ -164,7 +166,7 @@ def update_protocols_mobile_saude(worksheet) -> list:
 
             buffer += f'{row[colunas.get("comment")].value}'
 
-        if buffer:
+        if buffer and internal_observation_url["url"]:
             if not internal_observation_url["exists"]:
                 payload = {"observacao_interna": buffer}
                 create_internal_observation_req = safe_post(
@@ -197,7 +199,7 @@ def update_protocols_mobile_saude(worksheet) -> list:
             if not req_change_status.ok:
                 error_message = f'Não foi possível atualizar o status do protocolo {protocol_id}'
                 return error_message
-            
+
             return None
 
     logging.info(f'Acessando o site...')
@@ -225,7 +227,6 @@ def update_protocols_mobile_saude(worksheet) -> list:
         PEG = row[colunas.get("PEG")].value
         refund_id = row[colunas.get("refund_id")].value
         comment = row[colunas.get("comment")].value
-        
 
         logging.info(
             f'Consultando o protocolo {protocol_id} {protocols_count}/{protocols_total}...')
@@ -234,7 +235,7 @@ def update_protocols_mobile_saude(worksheet) -> list:
 
         if change_status or global_parameters["mobilesaude.update_protocol_with_error"]:
             error_message = None
-            
+
             protocol_data = get_occurrence_by_protocol(session, protocol_id)
             occurrence_data = get_occurrence_data(session, refund_id)
 
@@ -246,6 +247,8 @@ def update_protocols_mobile_saude(worksheet) -> list:
             assigned = safe_get_text(protocol_data, "nome_atendente")
             status_id = safe_get_text(protocol_data, "id_status")
             status_desc = safe_get_text(protocol_data, "status_label")
+            
+            logging.info(f'Status atual do protocolo {protocol_id}: {status_desc}')
 
             error_message = update_protocol(change_status)
             if error_message:
@@ -260,15 +263,17 @@ def update_protocols_mobile_saude(worksheet) -> list:
             # se tem comentário de erro, checa se precisa atribuir para usuário humano
             if comment and global_parameters["mobilesaude.assign_alternative"]:
                 alternative_user = global_parameters["mobilesaude.alternative_user_name"]
-                
+
                 if assigned == alternative_user:
-                    logging.info(f"O protocolo {protocol_id} está atribuído ao usuário alternativo {alternative_user}.")
-                
+                    logging.info(
+                        f"O protocolo {protocol_id} está atribuído ao usuário alternativo {alternative_user}.")
+
                 else:
                     if assign(alternative_user, occurrence_data, global_parameters["mobilesaude.status_analysis"]):
                         row[colunas.get("assigned")].value = alternative_user
                     else:
-                        logging.error(f"Não foi possível atribuir o protocolo {protocol_id} ao usuário alternativo {alternative_user}.")
+                        logging.error(
+                            f"Não foi possível atribuir o protocolo {protocol_id} ao usuário alternativo {alternative_user}.")
 
             # se terminou o processo sem comentário de erro, setar "OK"
             if not comment:
